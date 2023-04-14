@@ -19,8 +19,7 @@ def setup_sqlite():
     c = conn.cursor()
 
     # Create the table if it doesn't exist
-    c.execute('''CREATE TABLE IF NOT EXISTS files
-                 (name text, size real)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS files (name text)''')
     conn.commit()
 
     mem_conn = sqlite3.connect(':memory:')
@@ -31,19 +30,36 @@ def setup_sqlite():
     return mem_conn, mem_c, conn
 
 
+def cleanup_sqlite(conn, c):
+    '''Remove any files from the database that no longer exist'''
+    files = os.listdir(DIRECTORY)
+    c.execute('SELECT name FROM files')
+    for row in c.fetchall():
+        if row[0] not in files:
+            c.execute('DELETE FROM files WHERE name=?', (row[0],))
+
+    conn.commit()
+
+def convert_gif_to_mp4(file):
+    output_path = os.path.splitext(file)[0] + '.mp4'
+    stream = (ffmpeg.FFmpeg()
+              .option("y")
+              .input(file)
+              .output(output_path))
+    
+    @stream.on("progress")
+    def on_progress(progress):
+        print("\r" + f"frame: {progress.frame}, fps: {progress.fps}, size: {progress.size}, time left: {progress.time}", end="")
+    stream.execute()
+    print()
+
 def main():
     conn, c, file_conn = setup_sqlite()
-    # Create a notifier object for Windows desktop notifications
-    toaster = ToastNotifier()
 
     try:
-        files = os.listdir(DIRECTORY)
-        c.execute('SELECT name FROM files')
-        for row in c.fetchall():
-            if row[0] not in files:
-                c.execute('DELETE FROM files WHERE name=?', (row[0],))
-
-        conn.commit()
+        # Create a notifier object for Windows desktop notifications
+        toaster = ToastNotifier()
+        cleanup_sqlite(conn, c)
 
         while True:
             # Get a list of all files in the directory
@@ -56,19 +72,16 @@ def main():
                    c.execute("SELECT * FROM files WHERE name=?", (file,)).fetchone() is None and \
                    os.path.getsize(os.path.join(DIRECTORY, file)) > MIN_FILE_SIZE:
                     # Transcode the gif to mp4 using ffmpeg
-                    input_path = os.path.join(DIRECTORY, file)
-                    output_path = os.path.splitext(input_path)[0] + '.mp4'
-                    stream = ffmpeg.input(input_path)
-                    stream = ffmpeg.output(stream, output_path)
-                    ffmpeg.run(stream)
+                    print(f"Converting {file}")
+                    input_file = os.path.join(DIRECTORY, file)
+                    convert_gif_to_mp4(input_file)
 
                     # Add the file to the database
-                    size = os.path.getsize(output_path)
-                    c.execute("INSERT INTO files VALUES (?, ?)", (file, size))
+                    c.execute("INSERT INTO files VALUES (?)", (file,))
                     conn.commit()
 
                     # Display a Windows desktop notification for the transcoded file
-                    toaster.show_toast("File transcoded", f"{file} has been transcoded to MP4", duration=3, threaded=True)
+                    toaster.show_toast("File transcoded", f"{file} has been transcoded", duration=2, threaded=True)
 
             # Sleep for 1 second before checking again
             time.sleep(1)
