@@ -40,18 +40,21 @@ def cleanup_sqlite(conn, c):
 
     conn.commit()
 
+
 def convert_gif_to_mp4(file):
     output_path = os.path.splitext(file)[0] + '.mp4'
     stream = (ffmpeg.FFmpeg()
               .option("y")
               .input(file)
               .output(output_path))
-    
+
     @stream.on("progress")
     def on_progress(progress):
-        print("\r" + f"frame: {progress.frame}, fps: {progress.fps}, size: {progress.size}, time left: {progress.time}", end="")
+        print("\r" + (" " * 100) + "\r" +
+              f"frame: {progress.frame}, fps: {progress.fps}, size: {progress.size}, time left: {progress.time}", end="")
     stream.execute()
     print()
+
 
 def main():
     conn, c, file_conn = setup_sqlite()
