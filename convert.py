@@ -55,12 +55,6 @@ def main():
                 if file.endswith('.gif') and \
                    c.execute("SELECT * FROM files WHERE name=?", (file,)).fetchone() is None and \
                    os.path.getsize(os.path.join(DIRECTORY, file)) > MIN_FILE_SIZE:
-                    # Check if the file has already been processed
-                    c.execute("SELECT * FROM files WHERE name=?", (file,))
-                    result = c.fetchone()
-                    if result:
-                        continue  # File already processed, skip to next file
-
                     # Transcode the gif to mp4 using ffmpeg
                     input_path = os.path.join(DIRECTORY, file)
                     output_path = os.path.splitext(input_path)[0] + '.mp4'
